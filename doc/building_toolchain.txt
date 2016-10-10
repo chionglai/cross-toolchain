@@ -1,0 +1,145 @@
+
+Compiling GCC toolchain (particularly on OSX, but can be extended to other OSes)
+================================================================================
+
+1. Install homebrew by [1]:
+    >> ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+2. Install crosstool-ng by:
+    >> brew install crosstool-ng --with-grep
+3. Get dupes by:
+    >> brew tap homebrew/dupes
+4. Create a disk image to build and contain the toolchain. The image must be case-sensitive,
+   and have around 15GB size. Let's call this A.
+5. Format both the disk images to case-sensitive (need to do this, even though the images were
+   created with case-sensitive already)
+6. Look in /usr/local/Cellar/crosstool-ng/1.22.0_1/lib/crosstool-ng-1.22.0/samples/ for pre-defined
+   config file for some of the target systems.
+   If a suitable one is not found, get the next closest one.
+7. CD into /Volumes/A and run
+    >> ct-ng menuconfig
+   Enter the configuration as defined far far below.
+8. On top of that, check "Stop after extracting tarballs" under "Paths and misc options". This is because we need to modify binutils source code, particularly gold-threads.cc before compiling.
+9. Save and exit the menuconfig.
+10. Run:
+     >> ct-ng build
+11. Once done, open ./.build/src/binutils-2.25.1/gold/gold-threads.cc, and change
+        class Once_initialize
+        {
+         public:
+          Once_initialize()
+            : once_(PTHREAD_ONCE_INIT)
+          { }
+
+          // Return a pointer to the pthread_once_t variable.
+          pthread_once_t*
+          once_control()
+          { return &this->once_; }
+
+         private:
+          pthread_once_t once_;
+        };
+
+    to
+
+        class Once_initialize
+        {
+         public:
+          Once_initialize()
+          {once_.__sig = _PTHREAD_ONCE_SIG_init; once_.__opaque[0] = 0;}
+
+          // Return a pointer to the pthread_once_t variable.
+          pthread_once_t*
+          once_control()
+          { return &this->once_; }
+
+         private:
+          pthread_once_t once_;
+        };
+
+12. Open menuconfig again and uncheck the "Stop after extracting tarballs". Save the config.
+13. Open the saved .config file and change the following fields to:
+    a. CT_WANTS_STATIC_LINK=n
+    b. CT_CC_STATIC_LIBSTDCXX=n
+14. Open <path to gdb source>/gdb/python/python-config.py and comment the following 2 lines:
+    #            if getvar('LINKFORSHARED') is not None:
+    #                libs.extend(getvar('LINKFORSHARED').split())
+    This i due to the python-config.py script generates some invalid flags that causes gcc to fail [3].
+15. Run:
+     >> ulimit -n 1024
+     >> ct-ng build
+    This is to increase the shell resource to prevent compilation error.
+16. Done.
+
+
+Compulsory crosstool-NG configuration
+===================================
+A. Paths and misc options
+-------------------------
+1. Local tarballs directory. This is the download directory for all required components. E.g. set to /Volumes/A/src
+2. Working directory. This is the directory for building/compiling the toolchain. E.g. set to /Volumes/A/.build
+3. Prefix directory. This is the directory containing the final toolchain output for cross-compiling. E.g. set to /Volumes/A/${CT_TARGET}
+4. Check the "Debug crosstool-NG" and "Save intermediate steps"
+5. In "Extra host compiler flag", add "-fbracket-depth=512 -fno-unroll-loops" (this may not be required for other OSes) [2]
+      -fbracket-depth=512 - is to increase the max of nesting bracket when compiling the toolchain. Clang in OSX has default of 256, which will be exceeded.
+      -fno-unroll-loops - is to avoid optimisation from unrolling loops which will cause "Error: invalid constant (af) after fixup" when building libc_startfile.
+
+B. Target options
+-----------------
+1. Choose a "Target Architecture", e.g. arm.
+2. Choose "Endianness".
+3. Choose "Bitness".
+4. Enter one of "Architecture level", "Emit assembly for CPU" or "Tune for CPU".
+   a. "Architecture level" must be one of the valid options for -march flag for ARM GCC.
+   b. "Emit assembly for CPU" or "Tune for CPU" must be one of the valid options for -mcpu flag for ARM GCC. Refer "target.txt".
+5. Enter "Use specific FPU". It must be one of the valid options for -mfpu flag for ARM GCC.
+6. Select one of the options for "Floating point" if you know it.
+7. Incorrect configuration will cause the toolchain not to work. E.g. generate "Illegal instruction" when cross-compiled executable is run on target.
+
+C. Toolchain options
+--------------------
+1. Uncheck "Build Static Toolchain".
+2. Rename "Tuple's vendor string" or leave it blank.
+
+D. Operating system
+-------------------
+1. Select a "Target OS".
+2. If linux is selected, make sure the "Linux kernel version" is the same as the target (type "uname -a" from target terminal to find out the kernel version). Although, I have successfully tried "Hello world" with different kernel version.
+
+E. Binary utilities
+-------------------
+1. Select a "binutils version".
+2. Select "ld, gold" as "Linker to enable". Check both "Enable threaded gold" (this will have issue which requires editing the file gold-threads.cc) and "Add ld wrapper".
+3. Check "Enable support for plugins".
+
+F. C-library
+------------
+1. Select a "C library", normally glibc, but can also be uClibc.
+
+G. C-compiler
+-------------
+1. Check "Show Linaro versions". Then, select a "gcc version".
+2. Uncheck "Link libstdc++ statically into the gcc library". clang in OSX cannot handle static linking. May not be an issue for other OSes (have not tried).
+3. Check "C++" is required C++ cross-compiler.
+
+H. Debug facilities
+-------------------
+1. Check only "gdb". Other components (eg. dmalloc) does not work on OSX and will cause compilation to fail.
+2. In "gdb", uncheck "Build a static cross gdb" since clang in OSX cannot handle static linking (may not be an issue for other OSes, but have not tried).
+3. Select a "gdb version".
+
+
+Install crosstool-NG from source
+================================
+1. Download crosstool-ng from the project web site. Unpack the tarball and cd into the unpacked directory.
+2. Run ./configure --prefix=/opt/cross. You can pick somewhere else instead of /opt/cross but that’s where I like to keep it.
+3. Run make and sudo make install.
+4. Make sure /opt/cross/bin is in your $PATH.
+5. Now you can run ct-ng from terminal.
+
+
+Reference
+[1] http://www.jaredwolff.com/blog/cross-compiling-on-mac-osx-for-raspberry-pi/
+[2] https://www.mobibrw.com/2016/4659 (Use google translate to tranlate to English)
+[3] http://stackoverflow.com/questions/10792844/python-missing-or-unusable-error-while-cross-compiling-gdb
+[4] http://www.bootc.net/archives/2012/05/26/how-to-build-a-cross-compiler-for-your-raspberry-pi/
+

@@ -1,0 +1,47 @@
+
+Raspberry Pi
+============
+arch=armv6z
+cpu=arm1176jzf-s
+fpu=vfp
+
+Raspberry Pi 2
+==============
+arch=armv7
+cpu=cortex-a7
+fpu=neon-vfpv4
+
+Raspberry Pi 3
+==============
+arch=armv8-a
+cpu=cortex-a53
+fpu=neon-vfpv4
+
+TI OMAP L138
+============
+For this, enter -march and -mtune instead of -mcpu, since -mcpu=arm926ej-s will results in -march=armv5tej which will not work on OMAP-L138.
+arch=armv5te
+tune=arm926ej-s
+fpu=vfp???
+
+Beagle bone black
+=================
+arch=armv7-a
+cpu=cortex-a8
+fpu=vfpv3
+
+Odroid XU4
+==========
+arch=armv7-a
+cpu=cortex-a7
+fpu=neon-vfpv4
+
+arch=armv7-a
+cpu=cortex-a15
+fpu=neon-vfpv4
+
+
+Reference
+1. Available options for GCC - https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
+2. List of ARM architecture - https://en.wikipedia.org/wiki/List_of_ARM_microarchitectures
+3. List of applications of ARM cores - https://en.wikipedia.org/wiki/List_of_applications_of_ARM_cores
