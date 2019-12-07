@@ -137,6 +137,13 @@ Install crosstool-NG from source
 5. Now you can run ct-ng from terminal.
 
 
+Finding out the required architecture, CPU and FPU
+==================================================
+Target architecture, CPU and FPU can be found on the internet. However, if you have a working toolchain but on different OS, you can
+build a dummy executable using that toolchain and then run the readelf from that toolchain:
+   >> readelf -A <dummy executable>
+to get the type of target architecture, CPU and FPU. 
+
 Reference
 [1] http://www.jaredwolff.com/blog/cross-compiling-on-mac-osx-for-raspberry-pi/
 [2] https://www.mobibrw.com/2016/4659 (Use google translate to tranlate to English)
